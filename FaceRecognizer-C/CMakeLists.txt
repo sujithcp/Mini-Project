@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 2.8)
+project(Comma)
+set(OpenCV_DIR /usr/local/share/OpenCV)
+find_package( OpenCV REQUIRED)
+add_executable( Comma main.cpp Generals.cpp Generals.h)
+add_library(FACE FaceRecognizer.cpp FaceRecognizer.h)
+add_library(GENERALS Generals.cpp Generals.h)
+target_link_libraries( Comma FACE GENERALS ${OpenCV_LIBS})
