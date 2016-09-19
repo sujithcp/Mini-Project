@@ -3,10 +3,11 @@
 //
 #include <iostream>
 #include <fstream>
-#include <math.h>
 #include <dlib/image_processing.h>
-#include <dlib/image_io.h>
+/*
+ * #include <dlib/image_io.h>
 #include <dlib/image_processing/frontal_face_detector.h>
+*/
 #include <dlib/opencv/cv_image.h>
 #include <opencv2/face.hpp>
 #include "Generals.h"
@@ -60,7 +61,8 @@ void prepareTrainData(const string& filename, vector<Mat>& images, vector<int>& 
         getline(liness, path, separator);
         getline(liness, classlabel);
         if (!path.empty() && !classlabel.empty()) {
-            images.push_back(imread("/home/sujith/ClionProjects/Comma/res/images/OUT/" + path, 0));
+            //cout<<"Reading "<<path<<"\n";
+            images.push_back(preProcess(imread("/home/sujith/ClionProjects/Comma/res/images/OUT/" + path, 0)));
             labels.push_back(atoi(classlabel.c_str()));
         }
     }
@@ -73,13 +75,15 @@ void train()
     vector<Mat> images;
     vector<int> labels;
     prepareTrainData("/home/sujith/ClionProjects/Comma/res/images/OUT/faces_list.txt",images,labels,' ');
+    cout<<"***\n";
     model->train(images,labels);
     model->save("/home/sujith/ClionProjects/Comma/MODEL.YAML");
 }
 
 int recognize(Mat image)
 {
-    cvtColor(image,image,COLOR_BGR2GRAY);
+    //cvtColor(image,image,COLOR_BGR2GRAY);
+    preProcess(image);
     int res=-1;
     double conf=-1;
     model->predict(image, res, conf);
@@ -109,7 +113,7 @@ void recognitionTest(char separator = ' ')
         {
             if(i<mid)
             {
-                trainImages.push_back(imread("/home/sujith/ClionProjects/Comma/res/images/OUT/" + path, 0));
+                trainImages.push_back(preProcess(imread("/home/sujith/ClionProjects/Comma/res/images/OUT/" + path, 0)));
                 trainLabels.push_back(atoi(classlabel.c_str()));
                 labels.push_back(trainLabels[i]);
             }
@@ -131,7 +135,7 @@ void recognitionTest(char separator = ' ')
         if (!path.empty() && !classlabel.empty()) {
             int res = -1;
             double conf = -1;
-            model->predict(imread("/home/sujith/ClionProjects/Comma/res/images/OUT/" + path, 0), res, conf);
+            model->predict(preProcess(imread("/home/sujith/ClionProjects/Comma/res/images/OUT/" + path, 0)), res, conf);
             cout << res << " " << conf << " " << labels[i];
             if (res == labels[i])
             {
@@ -151,7 +155,7 @@ void recognitionTest(char separator = ' ')
 
 Mat preProcess(Mat image)
 {
-    Point2d e1,e2;
+    /*Point2d e1,e2;
     vector<Rect> eyes;
     Mat img = Mat::zeros(image.rows,image.cols,image.type());
     eye_detect.detectMultiScale(image,eyes);
@@ -167,9 +171,12 @@ Mat preProcess(Mat image)
     }
     imshow("Origiinal",image);
     waitKey(5000);
-    /*if(eyes.size()!=2)
-        return image;
-        */
+    if(eyes.size()!=2)
+    {
+        equalizeHist(image,img);
+        return img;
+    }
+
     e1.x = eyes[0].x+(eyes[0].width*0.5);
     e1.y = eyes[0].y+(eyes[0].height*0.5);
     e2.x = eyes[1].x+(eyes[1].width*0.5);
@@ -184,9 +191,12 @@ Mat preProcess(Mat image)
     double angle = 90-atan2(e2.x-e1.x,e2.y-e1.y)*180/3.1415;
     cout<<"Angle "<<angle<<endl;
     warpAffine(image,img,getRotationMatrix2D(e1,angle,1),img.size());
-    imshow("Rotated",img);
-    waitKey(5000);
-    return img;
+     */
+    resize(image,image,CvSize(300,300));
+    equalizeHist(image,image);
+    imshow("Hist",image);
+    waitKey(10);
+    return image;
 
 }
 
@@ -195,13 +205,15 @@ Mat preProcess(Mat image)
 void fooDriver()
 {
     face_detect.load("/home/sujith/ClionProjects/Comma/res/haarcascade_profileface.xml");
-    eye_detect.load("/home/sujith/ClionProjects/Comma/res/haarcascade_eye.xml");
+    //eye_detect.load("/home/sujith/ClionProjects/Comma/res/haarcascade_eye.xml");
     //Mat image = imread("./res/images/AF01/AF01AFS.JPG");
     //imshow("IMAGE",image);
     //waitKey(0);
     //getFacesFromImage(image);
     //recognitionTest();
+    //cout<<"Training\n";
     //train();
-    //cout<<recognize(imread("/home/sujith/ClionProjects/Comma/res/images/OUT/AF01-4.jpg"))<<endl;
+    //cout<<"Training completed\n";
+    cout<<recognize(imread("/home/sujith/ClionProjects/Comma/res/images/OUT/BM01-6.jpg",0))<<endl;
     preProcess(imread("/home/sujith/ClionProjects/Comma/res/images/OUT/BM01-6.jpg",0));
 }
