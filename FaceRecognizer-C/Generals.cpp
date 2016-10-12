@@ -15,6 +15,18 @@ using namespace cv::face;
 CascadeClassifier face_detect;
 CascadeClassifier eye_detect;
 Ptr<FaceRecognizer> model = createLBPHFaceRecognizer();
+
+void setParam(double a,double b,double g,double b1,double b2)
+{
+    ALPHA = a;
+    BETA = b;
+    GAMMA = g;
+    B1 = b1;
+    B2 = b2;
+    cout<<"GEN "<<ALPHA<<BETA<<GAMMA<<B1<<B2<<endl;
+}
+
+
 vector<Mat> getFacesFromImage(Mat image)
 {
     vector<Rect> faces;
@@ -83,7 +95,7 @@ void train()
 int recognize(Mat image)
 {
     //cvtColor(image,image,COLOR_BGR2GRAY);
-    preProcess(image);
+    image = preProcess(image);
     int res=-1;
     double conf=-1;
     model->predict(image, res, conf);
@@ -122,7 +134,6 @@ void recognitionTest(char separator = ' ')
             //cout<<trainLabels[i]<<"--"<<endl;
         }
     }
-
     model->clear();
     model->train(trainImages,trainLabels);
     int t=0,f=0;
@@ -192,15 +203,39 @@ Mat preProcess(Mat image)
     cout<<"Angle "<<angle<<endl;
     warpAffine(image,img,getRotationMatrix2D(e1,angle,1),img.size());
      */
+    if(image.channels()==3)
+        cvtColor(image,image,COLOR_BGR2GRAY);
     resize(image,image,CvSize(300,300));
     equalizeHist(image,image);
+    normalize(image,image,0,255,NORM_MINMAX,CV_8UC1);
+    Mat blur;
+    //GaussianBlur(image,blur,Size(21,21),0,0);
+    //addWeighted(image,1,blur,-0.9,0,image);
+    //cout<<"GEN "<<ALPHA<<BETA<<GAMMA<<B1<<B2<<endl;
+    GaussianBlur(image,blur,Size((int)B1,(int)B2),0,0);
+    addWeighted(image,ALPHA,blur,BETA,GAMMA,image);
+
     imshow("Hist",image);
     waitKey(10);
+
+
     return image;
 
 }
 
-
+bool initEngine()
+{
+    try {
+        model->load("/home/sujith/ClionProjects/Comma/MODEL.YAML");
+        face_detect.load("/home/sujith/ClionProjects/Comma/res/haarcascade_profileface.xml");
+    }
+    catch (Exception e)
+    {
+        cout<<"Model Load failed\n";
+        return false;
+    }
+    return true;
+}
 
 void fooDriver()
 {
