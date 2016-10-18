@@ -12,6 +12,21 @@
 using namespace dlib;
 FrameCapture::FrameCapture()
 {
+
+    readLines(CURR_DIR+"/res/images/OUT/class_map.txt",classmap_list);
+    string tmp,sub;
+    int sub_id;
+    for(size_t i = 0;i<classmap_list.size();i++)
+    {
+        tmp = classmap_list[i];
+        stringstream liness(tmp);
+        getline(liness, sub, ' ');
+        getline(liness, tmp);
+        sub_id=stoi(tmp);
+        class_map[sub_id]=sub;
+
+    }
+
 }
 
 void FrameCapture::capture()
@@ -43,6 +58,7 @@ void FrameCapture::capture()
             //Seek video to last frame
             //cap.set(CV_CAP_PROP_POS_FRAMES,frames-1);
             cap>>temp;
+            flip(temp,temp,1);
             //cap.retrieve(temp,CAP_OPENNI_DEPTH_MAP);
             // Turn OpenCV's Mat into something dlib can deal with.  Note that this just
             // wraps the Mat object, it doesn't copy anything.  So cimg is only valid as
@@ -63,7 +79,6 @@ void FrameCapture::capture()
             win.add_overlay(render_face_detections(shapes));
             dlib::array<array2d<rgb_pixel> > face_chips;
             extract_image_chips(cimg, get_face_chip_details(shapes), face_chips);
-            win_face.set_image(tile_images(face_chips));
             if(face_chips.size()>0)
             {
                 /*
@@ -77,7 +92,14 @@ void FrameCapture::capture()
                     cout<<"Exception found"<<endl<<e.what()<<endl;
                 }
                 */
-                recognize(toMat(face_chips[0]));
+                win_face.set_image(face_chips[0]);
+                int res = recognize(toMat(face_chips[0]));
+                if(class_map.find(res)!=class_map.end())
+                {
+                    cout<<"Recognized "<<class_map[res]<<endl;
+                    string audio = "espeak -p 60 "+class_map[res];
+                    system(audio.c_str());
+                }
             }
         }
     }

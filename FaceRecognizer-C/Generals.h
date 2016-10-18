@@ -9,6 +9,7 @@
 static double ALPHA,BETA,GAMMA,B1,B2;
 using namespace std;
 using namespace cv;
+void readLines(const string&,vector<string>& );
 void fooDriver();
 void setParam(double,double, double, double, double);
 vector<Mat> getFacesFromImage(Mat);

@@ -99,7 +99,8 @@ int recognize(Mat image)
     int res=-1;
     double conf=-1;
     model->predict(image, res, conf);
-    cout<<res<<" "<<conf<<endl;
+    //cout<<res<<" "<<conf<<endl;
+    cout<<"With confidence "<<conf<<endl;
     return res;
 }
 
