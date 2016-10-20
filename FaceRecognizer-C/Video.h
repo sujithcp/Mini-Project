@@ -13,7 +13,6 @@ public:
     map<int,string> class_map;
     vector< string > classmap_list;
     int src=0;
-    string CURR_DIR = "/home/sujith/ClionProjects/Comma/";
     string strUrl="";
     FrameCapture();
     void capture();

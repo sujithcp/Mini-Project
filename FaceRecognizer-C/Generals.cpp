@@ -3,19 +3,15 @@
 //
 #include <iostream>
 #include <fstream>
-#include <dlib/image_processing.h>
-/*
- * #include <dlib/image_io.h>
-#include <dlib/image_processing/frontal_face_detector.h>
-*/
-#include <dlib/opencv/cv_image.h>
 #include <opencv2/face.hpp>
+#include <dlib/image_processing/frontal_face_detector.h>
+#include <dlib/opencv.h>
 #include "Generals.h"
 using namespace cv::face;
 CascadeClassifier face_detect;
-CascadeClassifier eye_detect;
 Ptr<FaceRecognizer> model = createLBPHFaceRecognizer();
-
+dlib::frontal_face_detector detector;
+dlib::shape_predictor pose_model;
 void setParam(double a,double b,double g,double b1,double b2)
 {
     ALPHA = a;
@@ -24,6 +20,32 @@ void setParam(double a,double b,double g,double b1,double b2)
     B1 = b1;
     B2 = b2;
     cout<<"GEN "<<ALPHA<<BETA<<GAMMA<<B1<<B2<<endl;
+}
+
+void extractFaces(Mat image,std::vector<dlib::full_object_detection> & shapes,dlib::array<dlib::array2d<dlib::rgb_pixel> > & face_chips)
+{
+    dlib::cv_image<dlib::bgr_pixel> cimg(image);
+    // Detect face
+    std::vector<dlib::rectangle> faces = detector(cimg,0);
+    // Find the pose of each face.
+    for (unsigned long i = 0; i < faces.size(); ++i)
+        shapes.push_back(pose_model(cimg, faces[i]));
+    extract_image_chips(cimg, get_face_chip_details(shapes), face_chips);
+}
+bool extractFacesInit()
+{
+    try
+    {
+        detector = dlib::get_frontal_face_detector();
+        dlib::deserialize(CURR_DIR+"/res/shape_predictor_68_face_landmarks.dat") >> pose_model;
+    }
+    catch (Exception e)
+    {
+        cout<<e.code<<" "<<e.err<<"\n"<<e.msg<<"\n";
+        return 1;
+    }
+
+    return true;
 }
 
 
@@ -62,7 +84,7 @@ void readLines(const string& filename,vector<string>& lines)
     }
 }
 
-void prepareTrainData(const string& filename, vector<Mat>& images, vector<int>& labels, char separator = ' ')
+void prepareTrainData(const string& filename, vector<Mat>& images, vector<int>& labels, char separator = ' ',bool mask=false)
 {
     vector<string> lines;
     readLines(filename,lines);
@@ -73,23 +95,42 @@ void prepareTrainData(const string& filename, vector<Mat>& images, vector<int>& 
         getline(liness, path, separator);
         getline(liness, classlabel);
         if (!path.empty() && !classlabel.empty()) {
-            //cout<<"Reading "<<path<<"\n";
-            images.push_back(preProcess(imread("/home/sujith/ClionProjects/Comma/res/images/OUT/" + path, 0)));
+            cout<<"Reading "<<path<<"\n";
+            if(mask)
+            {
+                std::vector<dlib::full_object_detection> shapes;
+                dlib::array<dlib::array2d<dlib::rgb_pixel> > face_chips;
+                extractFaces(imread(CURR_DIR+"/res/images/OUT/" + path),shapes,face_chips);
+                if(face_chips.size()==1)
+                {
+                    images.push_back(preProcess(dlib::toMat(face_chips[0]),shapes[0]));
+                }
+                else
+                    continue;
+            }
+            else
+            {
+                images.push_back(preProcess(imread(CURR_DIR+"/res/images/OUT/" + path)));
+            }
+
             labels.push_back(atoi(classlabel.c_str()));
         }
     }
 
 }
 
-void train()
+void train(bool mask)
 {
 
     vector<Mat> images;
     vector<int> labels;
-    prepareTrainData("/home/sujith/ClionProjects/Comma/res/images/OUT/faces_list.txt",images,labels,' ');
+    if(mask)
+        prepareTrainData(CURR_DIR+"res/images/OUT/faces_list.txt",images,labels,' ',true);
+    else
+        prepareTrainData(CURR_DIR+"res/images/OUT/faces_list.txt",images,labels,' ');
     cout<<"***\n";
     model->train(images,labels);
-    model->save("/home/sujith/ClionProjects/Comma/MODEL.YAML");
+    model->save(CURR_DIR+"MODEL.YAML");
 }
 
 int recognize(Mat image)
@@ -103,11 +144,22 @@ int recognize(Mat image)
     cout<<"With confidence "<<conf<<endl;
     return res;
 }
+int recognize(Mat image,dlib::full_object_detection &shape)
+{
+    //cvtColor(image,image,COLOR_BGR2GRAY);
+    image = preProcess(image,shape);
+    int res=-1;
+    double conf=-1;
+    model->predict(image, res, conf);
+    //cout<<res<<" "<<conf<<endl;
+    cout<<"With confidence "<<conf<<endl;
+    return res;
+}
 
 void recognitionTest(char separator = ' ')
 {
     vector<string> lines;
-    readLines("/home/sujith/ClionProjects/Comma/res/images/OUT/faces_list.txt",lines);
+    readLines(CURR_DIR+"/res/images/OUT/faces_list.txt",lines);
     vector<int> labels;
     vector<Mat> trainImages;
     vector<int> trainLabels;
@@ -126,7 +178,7 @@ void recognitionTest(char separator = ' ')
         {
             if(i<mid)
             {
-                trainImages.push_back(preProcess(imread("/home/sujith/ClionProjects/Comma/res/images/OUT/" + path, 0)));
+                trainImages.push_back(preProcess(imread(CURR_DIR+"/res/images/OUT/" + path, 0)));
                 trainLabels.push_back(atoi(classlabel.c_str()));
                 labels.push_back(trainLabels[i]);
             }
@@ -147,7 +199,7 @@ void recognitionTest(char separator = ' ')
         if (!path.empty() && !classlabel.empty()) {
             int res = -1;
             double conf = -1;
-            model->predict(preProcess(imread("/home/sujith/ClionProjects/Comma/res/images/OUT/" + path, 0)), res, conf);
+            model->predict(preProcess(imread(CURR_DIR+"/res/images/OUT/" + path, 0)), res, conf);
             cout << res << " " << conf << " " << labels[i];
             if (res == labels[i])
             {
@@ -166,6 +218,27 @@ void recognitionTest(char separator = ' ')
 }
 
 Mat preProcess(Mat image)
+{
+    if(image.channels()==3)
+        cvtColor(image,image,COLOR_BGR2GRAY);
+    resize(image,image,CvSize(300,300));
+    equalizeHist(image,image);
+    normalize(image,image,0,255,NORM_MINMAX,CV_8U);
+    Mat blur;
+    //GaussianBlur(image,blur,Size(21,21),0,0);
+    //addWeighted(image,1,blur,-0.9,0,image);
+    //cout<<"GEN "<<ALPHA<<BETA<<GAMMA<<B1<<B2<<endl;
+    GaussianBlur(image,blur,Size((int)B1,(int)B2),0,0);
+    addWeighted(image,ALPHA,blur,BETA,GAMMA,image);
+    imshow("Hist",image);
+    waitKey(10);
+
+
+    return image;
+
+}
+
+Mat preProcess(Mat image,dlib::full_object_detection &shape)
 {
     /*Point2d e1,e2;
     vector<Rect> eyes;
@@ -206,29 +279,37 @@ Mat preProcess(Mat image)
      */
     if(image.channels()==3)
         cvtColor(image,image,COLOR_BGR2GRAY);
-    resize(image,image,CvSize(300,300));
-    equalizeHist(image,image);
-    normalize(image,image,0,255,NORM_MINMAX,CV_8UC1);
-    Mat blur;
-    //GaussianBlur(image,blur,Size(21,21),0,0);
-    //addWeighted(image,1,blur,-0.9,0,image);
-    //cout<<"GEN "<<ALPHA<<BETA<<GAMMA<<B1<<B2<<endl;
-    GaussianBlur(image,blur,Size((int)B1,(int)B2),0,0);
-    addWeighted(image,ALPHA,blur,BETA,GAMMA,image);
-
-    imshow("Hist",image);
+    Mat res;
+    Mat mask(image.rows, image.cols, CV_8UC1, cv::Scalar(0));
+    vector< vector<Point> >  co_ordinates;
+    co_ordinates.push_back(vector<Point>());
+    int orgx = (int) shape.get_rect().tl_corner().x();
+    int orgy = (int) shape.get_rect().tl_corner().y();
+    co_ordinates[0].push_back(Point((int)shape.part(1).x()-orgx,(int)shape.part(20).y()-orgy+10));
+    for(size_t i = 2;i<17;i++)
+    {
+        //cout<<shape.part(i)<<endl;
+        co_ordinates[0].push_back(Point((int)shape.part(i).x()-orgx,(int)shape.part(i).y()-orgy));
+    }
+    co_ordinates[0].push_back(Point((int)shape.part(17).x()-orgx,(int)shape.part(25).y()-orgy+10));
+    co_ordinates[0].push_back(Point((int)shape.part(0).x()-orgx,(int)shape.part(0).y()-orgy));
+    drawContours( mask,co_ordinates,0, Scalar(255),CV_FILLED, 8 );
+    image.copyTo(res,mask);
+    imshow("mask",mask);
+    waitKey(10);
+    imshow("res",res);
     waitKey(10);
 
 
-    return image;
+    return preProcess(res);
 
 }
 
 bool initEngine()
 {
     try {
-        model->load("/home/sujith/ClionProjects/Comma/MODEL.YAML");
-        face_detect.load("/home/sujith/ClionProjects/Comma/res/haarcascade_profileface.xml");
+        model->load(CURR_DIR+"/MODEL.YAML");
+        face_detect.load(CURR_DIR+"/res/haarcascade_profileface.xml");
     }
     catch (Exception e)
     {
@@ -240,8 +321,8 @@ bool initEngine()
 
 void fooDriver()
 {
-    face_detect.load("/home/sujith/ClionProjects/Comma/res/haarcascade_profileface.xml");
-    //eye_detect.load("/home/sujith/ClionProjects/Comma/res/haarcascade_eye.xml");
+    face_detect.load(CURR_DIR+"/res/haarcascade_profileface.xml");
+    //eye_detect.load(CURR_DIR+"/res/haarcascade_eye.xml");
     //Mat image = imread("./res/images/AF01/AF01AFS.JPG");
     //imshow("IMAGE",image);
     //waitKey(0);
@@ -250,6 +331,6 @@ void fooDriver()
     //cout<<"Training\n";
     //train();
     //cout<<"Training completed\n";
-    cout<<recognize(imread("/home/sujith/ClionProjects/Comma/res/images/OUT/BM01-6.jpg",0))<<endl;
-    preProcess(imread("/home/sujith/ClionProjects/Comma/res/images/OUT/BM01-6.jpg",0));
+    cout<<recognize(imread(CURR_DIR+"/res/images/OUT/BM01-6.jpg",0))<<endl;
+    preProcess(imread(CURR_DIR+"/res/images/OUT/BM01-6.jpg",0));
 }

@@ -46,7 +46,7 @@ void FrameCapture::capture()
         image_window win,win_face;
         cv::Mat temp;
         int face_count = 0;
-        if(!initEngine())
+        if(!initEngine() || !extractFacesInit())
         {
             cout << "Model Load failed\n";
             return;
@@ -68,17 +68,13 @@ void FrameCapture::capture()
             // while using cimg.
             cv_image<bgr_pixel> cimg(temp);
             // Detect face
-            std::vector<dlib::rectangle> faces = detector(cimg,0);
-            // Find the pose of each face.
             std::vector<full_object_detection> shapes;
-            for (unsigned long i = 0; i < faces.size(); ++i)
-                shapes.push_back(pose_model(cimg, faces[i]));
-            // Display it all on the screen
+            dlib::array<array2d<rgb_pixel> > face_chips;
+            extractFaces(temp,shapes,face_chips);
             win.clear_overlay();
             win.set_image(cimg);
             win.add_overlay(render_face_detections(shapes));
-            dlib::array<array2d<rgb_pixel> > face_chips;
-            extract_image_chips(cimg, get_face_chip_details(shapes), face_chips);
+
             if(face_chips.size()>0)
             {
                 /*
@@ -92,7 +88,11 @@ void FrameCapture::capture()
                     cout<<"Exception found"<<endl<<e.what()<<endl;
                 }
                 */
+
+                cout<<shapes[0].get_rect().tl_corner()<<" "<<shapes[0].get_rect().br_corner()<<endl;
+                cout<<shapes[0].part(0)<<endl;
                 win_face.set_image(face_chips[0]);
+                //int res = recognize(toMat(face_chips[0]),shapes[0]);
                 int res = recognize(toMat(face_chips[0]));
                 if(class_map.find(res)!=class_map.end())
                 {
